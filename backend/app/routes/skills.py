@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from app.core.extraction import extract_skills_from_text, EXTRACTION_TAXONOMY
+
 router = APIRouter(
     prefix="/skills",
     tags=["Skills"]
@@ -10,6 +12,10 @@ router = APIRouter(
 class Skill(BaseModel):
     name: str
     category: str
+
+
+class JobDescriptionRequest(BaseModel):
+    job_description: str
 
 
 skills = []
@@ -35,40 +41,24 @@ def get_skills():
     return {
         "skills": skills
     }
-TECHNICAL_SKILLS = [
-    "python",
-    "numpy",
-    "pandas",
-    "matplotlib",
-    "seaborn",
-    "flask",
-    "sql",
-    "scikit-learn",
-    "sklearn",
-    "html",
-    "css",
-    "javascript",
-    "react",
-    "node.js",
-    "machine learning",
-    "deep learning",
-    "tensorflow",
-    "pytorch",
-    "git",
-    "github",
-    "mongodb",
-    "mysql",
-    "fastapi"
-]
+
+
+@router.post("/extract-jd")
+def extract_jd_skills(data: JobDescriptionRequest):
+    extracted = extract_skills_from_text(data.job_description)
+    return {
+        "extracted_skills": extracted,
+        "total_count": len(extracted)
+    }
+
+
+# Retained for backward compatibility
+TECHNICAL_SKILLS = EXTRACTION_TAXONOMY
 
 
 def extract_skills(text: str):
-    text = text.lower()
-
-    found_skills = []
-
-    for skill in TECHNICAL_SKILLS:
-        if skill in text:
-            found_skills.append(skill)
-
-    return sorted(set(found_skills))
+    """
+    Extracts tech skills from text using boundary-aware matching and normalization.
+    Fully backward compatible with resume.py.
+    """
+    return extract_skills_from_text(text)
