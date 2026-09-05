@@ -7,26 +7,45 @@ from app.core.security import (
     create_access_token
 )
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+from app.supabase_client import supabase
 
-users = {}
+
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/signup")
 def signup(data: SignupRequest):
 
-    if data.email in users:
+    # Check if user already exists
+    existing_user = (
+        supabase
+        .table("users")
+        .select("*")
+        .eq("email", data.email)
+        .execute()
+    )
+
+    if existing_user.data:
         raise HTTPException(
             status_code=400,
             detail="Email already registered"
         )
 
-    users[data.email] = {
-        "name": data.name,
-        "email": data.email,
-        "password": hash_password(data.password),
-        "role": data.role
-    }
+    # Hash password
+    hashed_password = hash_password(data.password)
+
+    # Insert user into Supabase
+    new_user = (
+        supabase
+        .table("users")
+        .insert({
+            "name": data.name,
+            "email": data.email,
+            "password": hashed_password,
+            "role": data.role
+        })
+        .execute()
+    )
 
     return {
         "message": "User registered successfully",
@@ -37,20 +56,34 @@ def signup(data: SignupRequest):
 @router.post("/login")
 def login(data: LoginRequest):
 
-    user = users.get(data.email)
+    # Find user
+    result = (
+        supabase
+        .table("users")
+        .select("*")
+        .eq("email", data.email)
+        .execute()
+    )
 
-    if not user:
+    if not result.data:
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password"
         )
 
-    if not verify_password(data.password, user["password"]):
+    user = result.data[0]
+
+    # Verify password
+    if not verify_password(
+        data.password,
+        user["password"]
+    ):
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password"
         )
 
+    # Create JWT
     token = create_access_token({
         "email": user["email"],
         "role": user["role"]
